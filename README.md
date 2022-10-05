@@ -69,4 +69,24 @@ $ torch python SEAMDatashow_inference.py --model1 ./pre_weight/backwardmodel_tes
                      --f2 ./data/1trace/test/y \
                      --plt.savefig('./2d_Results_notime_pred.pdf')
 ```
+## Compare with GRU deep learning model
 
+```bash
+cd seam
+$ torch python comparision.py
+```
+## Inference
+After exporting model, you can use it for inference. For example:
+
+```bash
+$ torch python comparision_inference.py --file_params1 ./weight/backwardCRNNmodel_test500_loss0.005003948761441279 \
+                     --x ./data/1trace/test/x \
+                     --y ./data/1trace/test/y \
+                     --plt.savefig('./comResults_notimepred50.pdf')
+```
+```bash
+$ torch python comparisionDatashow_inference.py --Gxy ./weight/backwardCRNNmodel_test500_loss0.005003948761441279 \
+                     --f1 ./data/1trace/test/x \
+                     --f2 ./data/1trace/test/y \
+                     --plt.savefig('./com2d_Results_notime_pred.pdf')
+```
