@@ -515,7 +515,7 @@ print("finished")
 x = x_normalization.unnormalize(x)
 y = y_normalization.unnormalize(y)
 y_pred = y_normalization.unnormalize(y_pred)
-#x_pred = x_normalization.unnormalize(x_pred)
+x_pred = x_normalization.unnormalize(x_pred)
 
 plt.plot(y, color="black", label="True AI", linestyle='dotted', linewidth=1.5)
 plt.plot(y_pred, color="red", label='Predict', linewidth=0.5)

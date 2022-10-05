@@ -9,21 +9,97 @@ import torch.nn.functional as F
 from torch.utils.data import Dataset, DataLoader,TensorDataset
 import numpy as np
 import matplotlib.pyplot as plt
+
 from torchvision import transforms
 import os
+#os.environ["CUDA_VISIBLE_DEVICES"] = "1"
 from torch.utils import data
 from tqdm import tqdm
 from collections import defaultdict
 from torch.nn import init
-#os.environ["CUDA_VISIBLE_DEVICES"] = "1"
-"""
+class CRNN(nn.Module):
+	"""
 
+	Input:
+		X: (n_samples, n_channel, n_length)
+		Y: (n_samples)
 
-"""
+	Output:
+		out: (n_samples)
 
-model1 = torch.load("./pre_weight/backwardmodel_test499_loss0.0003094713379554874")  ###model_522 + 619
-model2 = torch.load("./pre_weight/forwardmodel_test499_loss0.0003094713379554874")  ###model_522 + 619
+	Pararmetes:
+		n_classes: number of classes
 
+	"""
+
+	def __init__(self, input_dim, out_dim, n_len_seg, n_classes, verbose=False):
+		super(CRNN, self).__init__()
+
+		self.n_len_seg = n_len_seg
+		self.n_classes = n_classes
+		self.input_dim = input_dim
+		self.out_dim = out_dim
+
+		#self.device = device
+		self.verbose = verbose
+
+		# # (batch, channels, length)
+		# self.layer_cnn=nn.Sequential(
+		# 	nn.Conv1d(in_channels=self.in_channels,
+		# 						 out_channels=self.out_channels,
+		# 						 kernel_size=1,
+		# 						 stride=1),
+		# 	nn.LeakyReLU(0.2,True)
+		# )
+		# self.cnn = nn.Conv1d(in_channels=self.in_channels,
+		# 					 out_channels=self.out_channels,
+		# 					 kernel_size=1,
+		# 					 stride=1)
+		#self.dropout=nn.Dropout(p=0.1)
+		# (batch, seq, feature)
+		self.rnn1 = nn.GRU(input_size=2001,
+						   hidden_size=2001,
+						   num_layers=1,
+						   bias=False,
+						   batch_first=True,
+						   bidirectional=True)
+
+		self.layer_linear1 = nn.Sequential(
+			nn.Linear(2001*2, 2001, bias=False)
+			# 	nn.LeakyReLU(0.2, True)
+		)
+	def forward(self, x):
+
+		# self.n_channel, self.n_length = x.shape[-2], x.shape[-1]
+		# assert (self.n_length % self.n_len_seg == 0), "Input n_length should divided by n_len_seg"
+		# self.n_seg = self.n_length // self.n_len_seg
+		out = x
+		#print(out.shape)
+		out = out.permute(0, 1, 2)
+		# out = self.layer_cnn(out)
+		#out=self.dropout(out)
+		#print(out.shape)
+		#out = out.permute(0, 2, 1)#(batch_size,seq_len,input_size)
+		#print(out.shape)
+		#_, (out) = self.rnn(out)#(numlayers,batchsize,hiddensize)
+		out, h0 = self.rnn1(out)#(batchsize,seg_len,hiddensize)
+		#print("out,h0",out.shape,h0.shape)
+		#print("out,h2", out.shape, h2.shape)
+		#out = out.permute(0, 2, 1)
+		#print("out.shape:{}".format(out.shape))
+		out=self.layer_linear1(out)
+		#print("out.shape:{}".format(out.shape))
+		#print('out.shape:', out.shape)
+		#print(out.shape)
+		#out = torch.squeeze(out, dim=-1)#(batch_size,hiddensize)
+		#print('out.shape:',out.shape)
+		#print(out.shape)
+		#out = self.dense(out)#(batch_size,n_classes)
+		#out=self.layer_linear1(out)
+		#out=self.dropout(out)
+		#out=self.layer_linear2(out)
+
+		return out
 
 
 class inverse_model522(nn.Module):
@@ -280,6 +356,10 @@ class inverse_model619(nn.Module):
         return x
 
 
+
+#model1 = torch.load("/data/hany/weight/backwardmodel_test499_loss0.0003094713379554874")  ###model_522 + 619
+#model2 = torch.load("/data/hany/weight/forwardmodel_test499_loss0.0003094713379554874")  ###model_522 + 619
+
 class Normalization:
     def __init__(self, mean_val=None,std_val=None):
         self.mean_val = mean_val
@@ -326,7 +406,6 @@ def display_results(loss, property_corr, property_r2):
     #print("loss: {:.4f}".format(loss))
     print("loss: {:.2e}\nCorrelation: {:.4f}\nr2 Coeff.  : {:.4f}".format(loss, property_corr, property_r2))
     return loss.item()
-
 
 def zone_and_linked1(ax, axins, zone_left, zone_right, x, y, linked='bottom',
                     x_ratio=0.05, y_ratio=0.05):
@@ -469,6 +548,8 @@ def zone_and_linked_xychange_plt(axins, zone_left, zone_right, x, y, linked='bot
     ax.plot([205, 305, 305, 205, 205],
             [ylim_left, ylim_left, ylim_right, ylim_right, ylim_left], "red")
 
+
+
 def sort_list_IDs(list_IDs):
     list_nums = [int(i.split(".")[0]) for i in list_IDs]
     list_sort = sorted(enumerate(list_nums), key=lambda x: x[1])
@@ -543,20 +624,30 @@ class Dataset(data.Dataset):
             return X
 
 
+from skimage.metrics import structural_similarity, peak_signal_noise_ratio
+def PSNR(true_image, real_image):
+    true_image = true_image.astype(np.float64)
+    real_image = real_image.astype(np.float64)
+
+    psnr = peak_signal_noise_ratio(true_image, real_image, data_range=true_image.max()-true_image.min())
+    return psnr
+def SSIM(true_image, real_image):
+    true_image = true_image.astype(np.float64)
+    real_image = real_image.astype(np.float64)
+
+    ssim = structural_similarity(true_image, real_image, data_range=true_image.max()-true_image.min())
+
+    return ssim
 if __name__ == '__main__':
 
 
 
-    model1 = torch.load("./pre_weight/backwardmodel_test499_loss0.0003094713379554874")  ###model_522 + 619
-    model2 = torch.load("./pre_weight/forwardmodel_test499_loss0.0003094713379554874")  ###model_522 + 619
+    #Gxy = torch.load("./weight/backwardmodel_test499_loss0.0003094713379554874").cuda()
+    # file_params1 = "./weight/backwardCRNNmodel_test500_loss0.08815023709427226"###model_522 + 619
+    Gxy = torch.load("./weight/backwardCRNNmodel_test500_loss0.005003948761441279").cuda()
+    #Gyx = torch.load("./weight/forwardmodel_test499_loss0.0003094713379554874").cuda()
 
 
-    Gxy = torch.load("./weight/init0model1_pretraing_test500").cuda()
-    Gyx = torch.load("./weight/init0model2_pretraing_test500").cuda()#0.0077
-
-
-    #Gxy = torch.load("/data/hany/SEAMrecord/weights/init0model1_pretraing_2shot_test500_loss0.005672495232359394").cuda()
-    #Gyx = torch.load("/data/hany/SEAMrecord/weights/init0model1_pretraing_2shot_test500_loss0.005672495232359394").cuda()#0.0077
 
 
     criterion = nn.SmoothL1Loss(reduction="sum")
@@ -567,20 +658,17 @@ if __name__ == '__main__':
     test_property_corr = []
     test_property_r2 = []
     Gxy.eval()
-    Gyx.eval()
+    #Gyx.eval()
     print("\nTesting the model\n")
-
 
     with torch.no_grad():
         test_loss = []
         for k in range(0, 325, 1):
 
-            f1 = np.fromfile("./data/2D/SEAM_time_test7/record_shot31_time_dispersion2001x325.bin", dtype=np.float32).reshape(325, 2001)  # 1550x2001 double
-            #f1 = np.fromfile("/data/hany/0pinsan_test_y/record_1.2ms_shot102_2001x550.bin", dtype=np.float32).reshape(550, 2001)
+            f1 = np.fromfile("./data/2D/SEAM_time_test7/record_shot31_time_dispersion2001x325.bin",dtype=np.float32).reshape(325, 2001)
             x = f1[k, ::]
 
             f2 = np.fromfile("./data/2D/SEAM_notime_test7/record_shot31_2ms2001x325.bin", dtype=np.float32).reshape(325, 2001)
-            #f2 = np.fromfile("/data/hany/0pinsan_test_x/record_0.2ms_no_time_dispersion_shot102_2001x550.bin",dtype=np.float32).reshape(550, 2001)  # 1550x2001 double
             y = f2[k, ::]
 
             x_normalization = Normalization(mean_val=np.mean(x),
@@ -597,62 +685,64 @@ if __name__ == '__main__':
             y = torch.tensor(y, dtype=torch.float).view(1, 1, 2001).cuda()
 
             y_pred = Gxy(x)
+            #print("y_pred shape is",y_pred.shape)
             corr, r2 = metrics(y_pred.detach(), y.detach())
             test_property_corr.append(corr)
             test_property_r2.append(r2)
 
-            x_rec = Gyx(y_pred)
+            #x_rec = Gyx(y_pred)
 
-
-
-
-
-            seismic_loss = criterion(x_rec, x) / np.prod(x.shape)
+            #seismic_loss = criterion(x_rec, x) / np.prod(x.shape)
 
 
             property_loss = criterion(y_pred, y) / np.prod(y.shape)
-            unlabeledloss = criterion(x_rec, x) / np.prod(x.shape)
-            loss = 1 * property_loss + 0.2 * unlabeledloss
+            #unlabeledloss = criterion(x_rec, x) / np.prod(x.shape)
+            loss = 1 * property_loss
             test_loss.append(loss.item())
 
-            x_pred = Gyx(y)
+            #x_pred = Gyx(y)
 
 
             x = x_normalization.unnormalize(x)
-            x_pred = x_normalization.unnormalize(x_pred)
+            #x_pred = x_normalization.unnormalize(x_pred)
 
             
             y = y_normalization.unnormalize(y)
             y_pred = y_normalization.unnormalize(y_pred)
             
 
-            true_x.append(x)
-            predicted_x.append(x_pred)
+            #true_x.append(x)
+            #predicted_x.append(x_pred)
             true_y.append(y)
             predicted_y.append(y_pred)
 
         display_results(test_loss, test_property_corr, test_property_r2)
 
-        predicted_x = torch.cat(predicted_x, dim=0)
-        true_x = torch.cat(true_x, dim=0)
+        #predicted_x = torch.cat(predicted_x, dim=0)
+        #true_x = torch.cat(true_x, dim=0)
         
         predicted_y = torch.cat(predicted_y, dim=0)
         true_y = torch.cat(true_y, dim=0)
 
 
         if torch.cuda.is_available():
-            predicted_x = predicted_x.cpu()
-            true_x = true_x.cpu()
+            #predicted_x = predicted_x.cpu()
+            #true_x = true_x.cpu()
             
             predicted_y = predicted_y.cpu()
             true_y = true_y.cpu()
 
-        predicted_x = predicted_x.numpy()
-        true_x = true_x.numpy()
+        #predicted_x = predicted_x.numpy()
+        #true_x = true_x.numpy()
         
         predicted_y = predicted_y.numpy()
         true_y = true_y.numpy()
-        
+
+        psnr = PSNR(true_y[:, 0], predicted_y[:, 0])
+        ssim = SSIM(true_y[:, 0], predicted_y[:, 0])
+        print("PSNR: {:.4f}\nSSIM: {:0.4f}".format(psnr, ssim))
+
+
         #######################
         #fig, ax = plt.subplots()
         #fig = plt.figure(figsize=(10,18),dpi=180)
@@ -661,8 +751,8 @@ if __name__ == '__main__':
         c=1
 
         d=2e2
-        left = true_x.min()/d
-        right = true_x.max()/d
+        left = true_y.min()/d
+        right = true_y.max()/d
         import matplotlib
         matplotlib.rcParams['pdf.fonttype'] = 42
         matplotlib.rcParams['ps.fonttype'] = 42
@@ -670,90 +760,6 @@ if __name__ == '__main__':
         #b=1
         a1=4*(10**-3)
         a2=20*(10**-3)
-
-
-
-        fig, ax = plt.subplots(1, 1, figsize=(5, 5))
-        cax = ax.imshow(predicted_x[:, 0].T , cmap='Greys', aspect=0.6, vmin=left, vmax=right)
-        ax.set_yticks([0, 250, 500, 750, 1000, 1250, 1500, 1750, 2000])
-        ax.set_yticklabels([0, 250*a1, 500*a1, 750*a1, 1000*a1, 1250*a1, 1500*a1, 1750*a1, 2000*a1])
-        ax.set_xticks([5, 55, 105, 155, 205, 255, 305])
-        ax.set_xticklabels([-3, -2, -1, 0, 1, 2, 3])
-        labels = ax.get_xticklabels() + ax.get_yticklabels()
-        [label.set_fontsize(10) for label in labels]
-        zone_and_linked_xychange(ax, 825, 1025, [predicted_x[:, 0].T /c] , range(0,2001), 'right')
-        fig.subplots_adjust(top=0.9, bottom=0.1, left=0.05, right=0.95)
-        ax.set_xlabel("Offset (m)", fontsize=10, labelpad=8.5)
-        ax.set_ylabel("Time (s)", fontsize=10, labelpad=8.5)
-        ax.xaxis.set_ticks_position('top')
-        ax.xaxis.set_label_position('top')
-        cbar = fig.colorbar(cax, shrink=0.6, pad=0.02)
-        cbar.ax.tick_params(labelsize=10)
-        #cbar.set_label('(m/s)', fontsize=25, rotation=270, labelpad=8.5)
-        #cbar.set_label('Velocity (m/s)', fontsize=25, rotation=270, labelpad=28)
-
-        #plt.savefig('/data/hany/weight/2dSEAMResults_time_pred.png', dpi=500, bbox_inches='tight')
-        plt.show()
-
-
-
-        fig, ax = plt.subplots(1, 1, figsize=(5, 5))
-        dif = abs(true_x[:, 0].T - predicted_x[:, 0].T)
-        #dif_left = true_x.min()
-        #dif_right = true_x.max()
-
-        cax = ax.imshow(dif, cmap='Greys', aspect=0.6, vmin=left, vmax=right)
-        ax.set_yticks([0, 250, 500, 750, 1000, 1250, 1500, 1750, 2000])
-        ax.set_yticklabels([0, 250*a1, 500*a1, 750*a1, 1000*a1, 1250*a1, 1500*a1, 1750*a1, 2000*a1])
-        ax.set_xticks([5, 55, 105, 155, 205, 255, 305])
-        ax.set_xticklabels([-3, -2, -1, 0, 1, 2, 3])
-
-        labels = ax.get_xticklabels() + ax.get_yticklabels()
-        [label.set_fontsize(10) for label in labels]
-        zone_and_linked_xychange(ax, 825, 1025, [true_x[:, 0].T/c], range(0,2001), 'right')
-        #zone_and_linked_xychange_plt(ax, 825, 1025, [true_x[:, 0].T / c], range(0, 2001), 'right')
-        fig.subplots_adjust(top=0.9, bottom=0.1, left=0.05, right=0.95)
-        ax.set_xlabel("Offset (km)", fontsize=10, labelpad=8.5)
-        ax.set_ylabel("Time (s)", fontsize=10, labelpad=8.5)
-        ax.xaxis.set_ticks_position('top')
-        ax.xaxis.set_label_position('top')
-        cbar = fig.colorbar(cax, shrink=0.6, pad=0.02)
-        cbar.ax.tick_params(labelsize=10)
-        #cbar.set_label('(m/s)', fontsize=25, rotation=270, labelpad=8.5)
-        #cbar.set_label('Velocity (m/s)', fontsize=25, rotation=270, labelpad=28)
-        plt.savefig('./2d_Dif_SEAMResults_time_true.eps', format='pdf', dpi=500, bbox_inches='tight')
-        plt.savefig('./2d_Dif_SEAMResults_time_true.pdf', format='pdf',dpi=500, bbox_inches='tight')
-        plt.show()
-
-
-
-        fig, ax = plt.subplots(1, 1, figsize=(5, 5))
-        dif = abs(true_y[:, 0].T - predicted_y[:, 0].T)
-
-
-        cax = ax.imshow(dif, cmap='Greys', aspect=0.6, vmin=left, vmax=right)
-        ax.set_yticks([0, 250, 500, 750, 1000, 1250, 1500, 1750, 2000])
-        ax.set_yticklabels([0, 250*a1, 500*a1, 750*a1, 1000*a1, 1250*a1, 1500*a1, 1750*a1, 2000*a1])
-        ax.set_xticks([5, 55, 105, 155, 205, 255, 305])
-        ax.set_xticklabels([-3, -2, -1, 0, 1, 2, 3])
-
-        labels = ax.get_xticklabels() + ax.get_yticklabels()
-        [label.set_fontsize(10) for label in labels]
-        zone_and_linked_xychange(ax, 825, 1025, [true_x[:, 0].T/c], range(0,2001), 'right')
-        #zone_and_linked_xychange_plt(ax, 825, 1025, [true_x[:, 0].T / c], range(0, 2001), 'right')
-        fig.subplots_adjust(top=0.9, bottom=0.1, left=0.05, right=0.95)
-        ax.set_xlabel("Offset (km)", fontsize=10, labelpad=8.5)
-        ax.set_ylabel("Time (s)", fontsize=10, labelpad=8.5)
-        ax.xaxis.set_ticks_position('top')
-        ax.xaxis.set_label_position('top')
-        cbar = fig.colorbar(cax, shrink=0.6, pad=0.02)
-        cbar.ax.tick_params(labelsize=10)
-        #cbar.set_label('(m/s)', fontsize=25, rotation=270, labelpad=8.5)
-        #cbar.set_label('Velocity (m/s)', fontsize=25, rotation=270, labelpad=28)
-        plt.savefig('./2d_Dif_SEAMResults_notime_true.eps', format='pdf',dpi=500, bbox_inches='tight')
-        plt.savefig('./2d_Dif_SEAMResults_notime_true.pdf', dpi=500, bbox_inches='tight')
-        plt.show()
-
 
         fig, ax = plt.subplots(1, 1, figsize=(5, 5))
         #fig, ax = plt.subplots()
@@ -765,8 +771,8 @@ if __name__ == '__main__':
 
         labels = ax.get_xticklabels() + ax.get_yticklabels()
         [label.set_fontsize(10) for label in labels]
-        zone_and_linked_xychange(ax, 825, 1025, [true_x[:, 0].T/c], range(0,2001), 'right')
-        #zone_and_linked_xychange_plt(ax, 825, 1025, [true_x[:, 0].T / c], range(0, 2001), 'right')
+        #zone_and_linked_xychange(ax, 825, 1025, [predicted_y[:, 0].T/c], range(0,2001), 'right')
+        zone_and_linked_xychange_plt(ax, 825, 1025, [predicted_y[:, 0].T / c], range(0, 2001), 'right')
         fig.subplots_adjust(top=0.9, bottom=0.1, left=0.05, right=0.95)
         ax.set_xlabel("Offset (km)", fontsize=10, labelpad=8.5)
         ax.set_ylabel("Time (s)", fontsize=10, labelpad=8.5)
@@ -776,8 +782,8 @@ if __name__ == '__main__':
         cbar.ax.tick_params(labelsize=10)
         #cbar.set_label('(m/s)', fontsize=25, rotation=270, labelpad=8.5)
         #cbar.set_label('Velocity (m/s)', fontsize=25, rotation=270, labelpad=28)
-        plt.savefig('./2dSEAMResults_notime_pred.eps', format='pdf', dpi=500, bbox_inches='tight')
-        plt.savefig('./2dSEAMResults_notime_pred.pdf', dpi=500, bbox_inches='tight')
+        plt.savefig('./com2dSEAMResults_notime_pred.eps', format='pdf', dpi=500, bbox_inches='tight')
+        plt.savefig('./com2dSEAMResults_notime_pred.pdf', dpi=500, bbox_inches='tight')
         plt.show()
 
 
@@ -794,8 +800,8 @@ if __name__ == '__main__':
 
         labels = ax.get_xticklabels() + ax.get_yticklabels()
         [label.set_fontsize(10) for label in labels]
-        zone_and_linked_xychange(ax, 825, 1025, [true_x[:, 0].T/c], range(0,2001), 'right')
-        #zone_and_linked_xychange_plt(ax, 825, 1025, [true_x[:, 0].T / c], range(0, 2001), 'right')
+        #zone_and_linked_xychange(ax, 825, 1025, [true_y[:, 0].T/c], range(0,2001), 'right')
+        zone_and_linked_xychange_plt(ax, 825, 1025, [true_y[:, 0].T / c], range(0, 2001), 'right')
         fig.subplots_adjust(top=0.9, bottom=0.1, left=0.05, right=0.95)
         ax.set_xlabel("Offset (km)", fontsize=10, labelpad=8.5)
         ax.set_ylabel("Time (s)", fontsize=10, labelpad=8.5)
@@ -805,16 +811,19 @@ if __name__ == '__main__':
         cbar.ax.tick_params(labelsize=10)
         #cbar.set_label('(m/s)', fontsize=25, rotation=270, labelpad=8.5)
         #cbar.set_label('Velocity (m/s)', fontsize=25, rotation=270, labelpad=28)
-        plt.savefig('./2dSEAMResults_notime_true.eps', format='pdf', dpi=500, bbox_inches='tight')
-        plt.savefig('./2dSEAMResults_notime_true.pdf', dpi=500, bbox_inches='tight')
+        plt.savefig('./com2dSEAMResults_notime_true.eps', format='pdf', dpi=500, bbox_inches='tight')
+        plt.savefig('./com2dSEAMResults_notime_true.pdf', dpi=500, bbox_inches='tight')
         plt.show()
 
-        ############################
-        # plot predicted impedance #
-        ############################
+
+
+
+
         fig, ax = plt.subplots(1, 1, figsize=(5, 5))
-        #fig, ax = plt.subplots()
-        cax = ax.imshow(predicted_x[:, 0].T /c, cmap='Greys', aspect=0.6, vmin=left, vmax=right)
+        dif = abs(true_y[:, 0].T - predicted_y[:, 0].T)
+
+
+        cax = ax.imshow(dif, cmap='Greys', aspect=0.6, vmin=left, vmax=right)
         ax.set_yticks([0, 250, 500, 750, 1000, 1250, 1500, 1750, 2000])
         ax.set_yticklabels([0, 250*a1, 500*a1, 750*a1, 1000*a1, 1250*a1, 1500*a1, 1750*a1, 2000*a1])
         ax.set_xticks([5, 55, 105, 155, 205, 255, 305])
@@ -822,8 +831,8 @@ if __name__ == '__main__':
 
         labels = ax.get_xticklabels() + ax.get_yticklabels()
         [label.set_fontsize(10) for label in labels]
-        zone_and_linked_xychange(ax, 825, 1025, [true_x[:, 0].T/c], range(0,2001), 'right')
-        #zone_and_linked_xychange_plt(ax, 825, 1025, [true_x[:, 0].T / c], range(0, 2001), 'right')
+        #zone_and_linked_xychange(ax, 825, 1025, [true_y[:, 0].T/c], range(0,2001), 'right')
+        zone_and_linked_xychange_plt(ax, 825, 1025, [true_y[:, 0].T / c], range(0, 2001), 'right')
         fig.subplots_adjust(top=0.9, bottom=0.1, left=0.05, right=0.95)
         ax.set_xlabel("Offset (km)", fontsize=10, labelpad=8.5)
         ax.set_ylabel("Time (s)", fontsize=10, labelpad=8.5)
@@ -833,53 +842,14 @@ if __name__ == '__main__':
         cbar.ax.tick_params(labelsize=10)
         #cbar.set_label('(m/s)', fontsize=25, rotation=270, labelpad=8.5)
         #cbar.set_label('Velocity (m/s)', fontsize=25, rotation=270, labelpad=28)
-        plt.savefig('./2dSEAMResults_time_pred.eps', format='pdf', dpi=500, bbox_inches='tight')
-        plt.savefig('./2dSEAMResults_time_pred.pdf', dpi=500, bbox_inches='tight')
-        #plt.savefig('/data/hany/weight/2dSEAMResults_time_pred.png', dpi=500, bbox_inches='tight')
-        plt.show()
-
-
-        fig, ax = plt.subplots(1, 1, figsize=(5, 5))
-        #fig, ax = plt.subplots()
-        cax = ax.imshow( true_x[:, 0].T /c, cmap='Greys', aspect=0.6, vmin=left, vmax=right)
-        ax.set_yticks([0, 250, 500, 750, 1000, 1250, 1500, 1750, 2000])
-        ax.set_yticklabels([0, 250*a1, 500*a1, 750*a1, 1000*a1, 1250*a1, 1500*a1, 1750*a1, 2000*a1])
-        ax.set_xticks([5, 55, 105, 155, 205, 255, 305])
-        ax.set_xticklabels([-3, -2, -1, 0, 1, 2, 3])
-
-        labels = ax.get_xticklabels() + ax.get_yticklabels()
-        [label.set_fontsize(10) for label in labels]
-        zone_and_linked_xychange(ax, 825, 1025, [true_x[:, 0].T/c], range(0,2001), 'right')
-        #zone_and_linked_xychange_plt(ax, 825, 1025, [true_x[:, 0].T / c], range(0, 2001), 'right')
-        fig.subplots_adjust(top=0.9, bottom=0.1, left=0.05, right=0.95)
-        ax.set_xlabel("Offset (km)", fontsize=10, labelpad=8.5)
-        ax.set_ylabel("Time (s)", fontsize=10, labelpad=8.5)
-        ax.xaxis.set_ticks_position('top')
-        ax.xaxis.set_label_position('top')
-        cbar = fig.colorbar(cax, shrink=0.6, pad=0.02)
-        cbar.ax.tick_params(labelsize=10)
-        #cbar.set_label('(m/s)', fontsize=25, rotation=270, labelpad=8.5)
-        #cbar.set_label('Velocity (m/s)', fontsize=25, rotation=270, labelpad=28)
-        plt.savefig('./2dSEAMResults_time_true.eps', format='pdf', dpi=500, bbox_inches='tight')
-        plt.savefig('./2dSEAMResults_time_true.pdf', dpi=500, bbox_inches='tight')
-        #plt.savefig('/data/hany/weight/2dSEAMResults_time_true.png', dpi=500, bbox_inches='tight')
+        plt.savefig('./com2d_Dif_SEAMResults_notime_true.eps', format='pdf',dpi=500, bbox_inches='tight')
+        plt.savefig('./com2d_Dif_SEAMResults_notime_true.pdf', dpi=500, bbox_inches='tight')
         plt.show()
 
 
 
 
-        ##########################################
-        # plot absolute different true-predicted #
-        ##########################################
 
 
 
 
-            
-        
-        
-        
-    
-    
-    
-    

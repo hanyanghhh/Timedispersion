@@ -635,17 +635,17 @@ if __name__ == '__main__':
             lr_scheduler.step()
 
         if epoch % 50 == 0:
-            file_params1 = "./weight/init0model1_pretraing_2shot_test{0}_loss{1}".format(epoch, epoch_loss)
+            file_params1 = "./weight/init0model1_pretraing_test{0}_loss{1}".format(epoch, epoch_loss)
             torch.save(model1, file_params1)
 
-            file_params2 = "./weight/init0model2_pretraing_2shot_test{0}_loss{1}".format(epoch, epoch_loss)
+            file_params2 = "./weight/init0model2_pretraing_test{0}_loss{1}".format(epoch, epoch_loss)
             torch.save(model2, file_params2)
             print("model has been stored!")
         if epoch == 250:
-            file_params1 = "./weight/init0model1_pretrainh_2shot_test{0}".format(epoch)
+            file_params1 = "./weight/init0model1_pretrainh_test{0}".format(epoch)
             torch.save(model1, file_params1)
 
-            file_params2 = "./weight/init0model2_pretraing_2shot_test{0}".format(epoch)
+            file_params2 = "./weight/init0model2_pretraing_test{0}".format(epoch)
             torch.save(model2, file_params2)
             print("model has been stored!")
     # file_params="LTSM_700.pth"#####3##

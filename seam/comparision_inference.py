@@ -121,7 +121,89 @@ def mea_std_norm(x):
 	x = x * np.std(x) + np.mean(x)
 	return x
 
+class CRNN(nn.Module):
+	"""
 
+	Input:
+		X: (n_samples, n_channel, n_length)
+		Y: (n_samples)
+
+	Output:
+		out: (n_samples)
+
+	Pararmetes:
+		n_classes: number of classes
+
+	"""
+
+	def __init__(self, input_dim, out_dim, n_len_seg, n_classes, verbose=False):
+		super(CRNN, self).__init__()
+
+		self.n_len_seg = n_len_seg
+		self.n_classes = n_classes
+		self.input_dim = input_dim
+		self.out_dim = out_dim
+
+		#self.device = device
+		self.verbose = verbose
+
+		# # (batch, channels, length)
+		# self.layer_cnn=nn.Sequential(
+		# 	nn.Conv1d(in_channels=self.in_channels,
+		# 						 out_channels=self.out_channels,
+		# 						 kernel_size=1,
+		# 						 stride=1),
+		# 	nn.LeakyReLU(0.2,True)
+		# )
+		# self.cnn = nn.Conv1d(in_channels=self.in_channels,
+		# 					 out_channels=self.out_channels,
+		# 					 kernel_size=1,
+		# 					 stride=1)
+		#self.dropout=nn.Dropout(p=0.1)
+		# (batch, seq, feature)
+		self.rnn1 = nn.GRU(input_size=2001,
+						   hidden_size=2001,
+						   num_layers=1,
+						   bias=False,
+						   batch_first=True,
+						   bidirectional=True)
+
+		self.layer_linear1 = nn.Sequential(
+			nn.Linear(2001*2, 2001, bias=False)
+			# 	nn.LeakyReLU(0.2, True)
+		)
+	def forward(self, x):
+
+		# self.n_channel, self.n_length = x.shape[-2], x.shape[-1]
+		# assert (self.n_length % self.n_len_seg == 0), "Input n_length should divided by n_len_seg"
+		# self.n_seg = self.n_length // self.n_len_seg
+		out = x
+		#print(out.shape)
+		out = out.permute(0, 1, 2)
+		# out = self.layer_cnn(out)
+		#out=self.dropout(out)
+		#print(out.shape)
+		#out = out.permute(0, 2, 1)#(batch_size,seq_len,input_size)
+		#print(out.shape)
+		#_, (out) = self.rnn(out)#(numlayers,batchsize,hiddensize)
+		out, h0 = self.rnn1(out)#(batchsize,seg_len,hiddensize)
+		#print("out,h0",out.shape,h0.shape)
+		#print("out,h2", out.shape, h2.shape)
+		#out = out.permute(0, 2, 1)
+		#print("out.shape:{}".format(out.shape))
+		out=self.layer_linear1(out)
+		#print("out.shape:{}".format(out.shape))
+		#print('out.shape:', out.shape)
+		#print(out.shape)
+		#out = torch.squeeze(out, dim=-1)#(batch_size,hiddensize)
+		#print('out.shape:',out.shape)
+		#print(out.shape)
+		#out = self.dense(out)#(batch_size,n_classes)
+		#out=self.layer_linear1(out)
+		#out=self.dropout(out)
+		#out=self.layer_linear2(out)
+
+		return out
 class inverse_model522(nn.Module):
     def __init__(self,resolution_ratio=4,nonlinearity="tanh"):
         super(inverse_model522, self).__init__()
@@ -380,15 +462,12 @@ class inverse_model619(nn.Module):
 
 
 """
-model1 = torch.load("./pre_weight/backwardmodel_test499_loss0.0003094713379554874")###model_522 + 619
-model2 = torch.load("./pre_weight/forwardmodel_test499_loss0.0003094713379554874")###model_522 + 619
 
 
 
-file_params1 = "./weight/init0model1_pretraing_test500"###model_522 + 619
+file_params1 = "./weight/backwardCRNNmodel_test500_loss0.005003948761441279"###model_522 + 619
 Gxy = torch.load(file_params1).cuda()  # 得到权重值
-file_params2 = "./weight/init0model2_pretraing_test500"####model_522 + 619
-Gyx = torch.load(file_params2).cuda()  # 得到权重值
+
 
 k=50
 x = np.fromfile("./data/2D/SEAM_time_test7/record_shot31_time_dispersion2001x325.bin", dtype=np.float32).reshape(325, 2001)
@@ -420,9 +499,7 @@ y_pred = y_pred
 
 y1 = torch.tensor(y,dtype=torch.float).view(1, 1, 2001).to(device)
 print("y1:" ,y1.shape)
-x_pred = Gyx(y1).squeeze()
-x_pred = x_pred.cpu().detach().numpy()
-x_pred = x_pred
+
 print("y_pred :" ,y_pred.shape)
 
 
@@ -430,7 +507,7 @@ print("finished")
 x = x_normalization.unnormalize(x)
 y = y_normalization.unnormalize(y)
 y_pred = y_normalization.unnormalize(y_pred)
-x_pred = x_normalization.unnormalize(x_pred)
+
 
 plt.plot(y, color="black", label="True AI", linestyle='dotted', linewidth=1.5)
 plt.plot(y_pred, color="red", label='Predict', linewidth=0.5)
@@ -461,28 +538,9 @@ plt.savefig('./SEAMResults_notimepred50.pdf', dpi=500, bbox_inches='tight')
 plt.show()
 
 
-fig, axins = plt.subplots(1, 1, figsize=(14, 6))
-# 在缩放图中也绘制主图所有内容，然后根据限制横纵坐标来达成局部显示的目的
-axins.plot(x, color="black", label="Target", linestyle='dotted', linewidth=2)
-axins.plot(x_pred, color="red", label='Predict', linewidth=0.5)
-axins.plot(y, color="blue", label='Input', linewidth=1.0)
-axins.set_title("Trace No.{index}".format(index=50), fontsize=30)
-axins.set_xlabel("Time (s)", fontsize=30, labelpad=10.5)
-axins.set_ylabel("Amplitude", fontsize=30, labelpad=10.5)
-axins.set_xticks([650, 700, 750, 800, 850, 900, 950])
-axins.set_xticklabels([650*a, 2.8, 750*a, 800*a, 850*a, 900*a, 3.8])
 
 
-labels = axins.get_xticklabels() + axins.get_yticklabels()
-[label.set_fontsize(20) for label in labels]
-# 局部显示并且进行连线
-zone_and_linked(axins, 650, 950, range(0, 2001),[x, x_pred, y], 'right')
-fig.subplots_adjust(top=0.95, bottom=0.1, left=0.095, right=0.95)
-axins.legend(prop={'size': 20})
 
-plt.savefig('./SEAMResults_timepred50.eps', format='pdf', dpi=500, bbox_inches='tight')
-plt.savefig('./SEAMResults_timepred50.pdf', dpi=500, bbox_inches='tight')
-plt.show()
 
 
 print("finished")
