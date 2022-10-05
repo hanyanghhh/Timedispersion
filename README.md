@@ -90,3 +90,10 @@ $ torch python comparisionDatashow_inference.py --Gxy ./weight/backwardCRNNmodel
                      --f2 ./data/1trace/test/y \
                      --plt.savefig('./com2d_Results_notime_pred.pdf')
 ```
+
+## The weight of this work in here：
+
+```bash
+链接：https://pan.baidu.com/s/1qf6ylRNm9C9EqrNFj9DVzg 
+提取码：1234
+```
